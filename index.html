@@ -1,0 +1,106 @@
+<html>
+<head>
+<link rel="icon" href="data:,">
+
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+    //setTimeout(function(){location.reload();},2000); // Reload page every 2 sec
+    google.charts.load('current', {'packages':['corechart']});
+
+    // Fetch data and pass it to Google chart when everything is loaded
+    let sampleTime;
+    
+    Promise.all( 
+        [1,2].map(num => 
+            new Promise((resolve, reject) => {
+                fetch("values" + num + ".dat")
+                .then(response => {
+                    sampleTime = response.headers.get("x-sampletime");
+                    return response.text();
+                })
+                .then(data => {
+                    //console.log(data);
+                    resolve(data);
+                })
+                .catch(error => reject(error))
+            })
+        ).concat([
+            new Promise((resolve, reject) => {
+                google.charts.setOnLoadCallback(resolve());
+            })
+        ])
+    )
+    .then(results => {
+        let data = results[0] + results[1]; // Combine two data files
+        data = data.split("\n").map(element => element.split(",").map(str => +str)); // Convert to number array
+        data = data.filter(element => element.length == 3); // Only keep arrays of proper length (3 data points)
+        data = data.map(row => [new Date(row[0]*1000),row[1],row[2]]).sort((a,b) => a[0] - b[0]); // Convert first column to dates
+        data = data.slice(-24*60/sampleTime); // Grab last 24 h from the end
+        drawChart(data);
+                
+        // Fill in latest data below graph
+        let latest = data[data.length - 1];
+        document.getElementById("time").innerHTML = latest[0].toLocaleTimeString();
+        document.getElementById("latestTemp").innerHTML = latest[1];
+        document.getElementById("latestHumid").innerHTML = latest[2];
+    });
+
+    function drawChart(data) {
+        // Chart data and options
+        //console.log(data)
+        let graphData = google.visualization.arrayToDataTable(data,true);
+
+        let options = {
+            chartArea: {width: '75%', height:'90%'},
+            legend: {position: "none"},
+            hAxis: {
+                format:"HH:mm",
+                textStyle: {fontSize:20},
+                gridlines: {count:6},
+                minorGridlines:{count: 0}
+            },
+            series: {
+              0: {
+                  targetAxisIndex: 0,
+                  color: "red",
+                  lineWidth:'4'
+              },
+              1: {
+                  targetAxisIndex: 1,
+                  color: "blue",
+                  lineWidth:'4'
+              }
+            },
+            vAxes: {
+              0: {
+                title: 'Temperature (\u2103)',
+                titleTextStyle: {color: "red", fontSize:30},
+                textStyle: {color: "red", fontSize:30},
+                viewWindow: {min:10, max:30},
+                gridlines : {interval: [1, 2, 5]},
+                minorGridlines:{count: 0}
+              },
+              1: {
+                title: 'Humidity (%)',
+                titleTextStyle: {color: "blue", fontSize:30},
+                textStyle: {color: "blue", fontSize:30},
+                viewWindow: {min:0, max:100},
+                gridlines: {count:0},
+                minorGridlines:{count: 0}
+              }
+            }
+        };
+  
+
+        let chart = new google.visualization.LineChart(document.getElementById('linechart_material'));
+        chart.draw(graphData, options);
+    }
+</script>
+</head>
+
+<body>
+    <div id="linechart_material" style="width: 900px; height: 500px"></div>
+    <br>
+    <div>Latest readings: <span id="latestTemp"></span>&#8451; and <span id="latestHumid"></span>% at <span id="time"></span></div>
+</body>
+</html>
